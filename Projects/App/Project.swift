@@ -6,6 +6,7 @@ let project = ProjectFactory.app(
     dependencies: [
         .project(target: "FeatureCheckIn", path: "../FeatureCheckIn"),
         .project(target: "FeatureHistory", path: "../FeatureHistory"),
+        .project(target: "CloudSync", path: "../CloudSync"),
         .project(target: "Domain", path: "../Domain"),
         .project(target: "CoreClients", path: "../CoreClients"),
         .external(name: "ComposableArchitecture"),

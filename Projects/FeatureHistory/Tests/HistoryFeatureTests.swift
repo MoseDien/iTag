@@ -1,3 +1,4 @@
+import CloudSync
 import ComposableArchitecture
 import CoreClients
 import Domain
@@ -87,6 +88,11 @@ final class HistoryFeatureTests: XCTestCase {
                 saveAll: { checkIns in
                     saved.value = checkIns
                 }
+            )
+            $0.cloudSyncClient = CloudSyncClient(
+                accountStatus: { .unavailable },
+                sync: { local in local },
+                markDeleted: { _ in }
             )
         }
 

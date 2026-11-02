@@ -11,6 +11,7 @@ let project = ProjectFactory.framework(
     testDependencies: [
         .project(target: "Domain", path: "../Domain"),
         .project(target: "CoreClients", path: "../CoreClients"),
+        .project(target: "CloudSync", path: "../CloudSync"),
         .external(name: "ComposableArchitecture"),
     ]
 )

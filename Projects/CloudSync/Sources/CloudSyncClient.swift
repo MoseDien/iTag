@@ -69,7 +69,7 @@ extension CloudSyncClient: DependencyKey {
 
     public static let liveValue = CloudSyncClient(
         accountStatus: {
-            CloudKitSyncEngine.accountStatus()
+            try await CloudKitSyncEngine.accountStatus()
         },
         sync: { local in
             try await CloudKitSyncEngine.sync(local)

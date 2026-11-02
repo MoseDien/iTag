@@ -90,10 +90,14 @@ public enum ProjectFactory {
                             "CFBundleDisplayName": "iTag",
                             "NSLocationWhenInUseUsageDescription": "iTag 需要访问你的位置，用于在当前位置打卡并记录。",
                             "UILaunchScreen": [:],
+                            // 与 entitlements 同源的 iCloud 能力开关：
+                            // 关闭时 CloudSync 自动降级为纯本地模式（不触碰 CloudKit）
+                            "CloudSyncEnabled": true,
                         ]
                     ),
                     sources: ["Sources/**"],
                     resources: ["Resources/**"],
+                    entitlements: "Resources/iTag.entitlements",
                     dependencies: dependencies
                 ),
             ]

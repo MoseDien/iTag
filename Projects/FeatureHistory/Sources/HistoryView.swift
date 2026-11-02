@@ -1,3 +1,4 @@
+import CloudSync
 import ComposableArchitecture
 import CoreClients
 import Domain
@@ -36,6 +37,33 @@ public struct HistoryView: View {
         .alert($store.scope(state: \.alert, action: \.alert))
         .sheet(item: $store.scope(state: \.editing, action: \.editing)) { detailStore in
             CheckInDetailView(store: detailStore)
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                cloudStatusView
+            }
+        }
+    }
+
+    // MARK: - 云同步状态
+
+    @ViewBuilder
+    private var cloudStatusView: some View {
+        switch store.cloudStatus {
+        case .syncing:
+            ProgressView()
+                .controlSize(.small)
+        case .ok:
+            Image(systemName: "checkmark.icloud")
+                .foregroundStyle(.secondary)
+        case .failed:
+            Image(systemName: "exclamationmark.icloud")
+                .foregroundStyle(.orange)
+        case .disabled:
+            Image(systemName: "icloud.slash")
+                .foregroundStyle(.secondary)
+        case nil:
+            EmptyView()
         }
     }
 

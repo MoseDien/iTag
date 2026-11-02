@@ -154,15 +154,16 @@ enum CloudKitSyncEngine {
 
     private static func fetchAllRecords(in database: CKDatabase) async throws -> [CKRecord] {
         var results: [CKRecord] = []
-        var cursor: CKQueryCursor?
-        repeat {
-            let page = try await database.records(
-                matching: CKQuery(recordType: recordType, predicate: NSPredicate(value: true)),
-                continuedFromCursor: cursor
-            )
+        var page = try await database.records(
+            matching: CKQuery(recordType: recordType, predicate: NSPredicate(value: true))
+        )
+        results.append(contentsOf: page.matchResults.compactMap { try? $0.1.get() })
+        var cursor = page.queryCursor
+        while let next = cursor {
+            page = try await database.records(continuingMatchFrom: next)
             results.append(contentsOf: page.matchResults.compactMap { try? $0.1.get() })
             cursor = page.queryCursor
-        } while cursor != nil
+        }
         return results.filter { $0.recordType == recordType }
     }
 }

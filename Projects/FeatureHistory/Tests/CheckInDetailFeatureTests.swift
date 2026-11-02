@@ -24,6 +24,8 @@ final class CheckInDetailFeatureTests: XCTestCase {
             CheckInDetailFeature()
         } withDependencies: {
             $0.dismiss = DismissEffect {}
+            let saveTime = Date(timeIntervalSince1970: 5_000)
+            $0.date = DateGenerator { saveTime }
         }
 
         var updated = base

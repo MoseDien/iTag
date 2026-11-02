@@ -1,3 +1,4 @@
+import CloudSync
 import ComposableArchitecture
 import CoreClients
 import Domain
@@ -29,6 +30,8 @@ public struct HistoryFeature {
         /// 地图模式的时间范围（记录列表始终展示全部）。
         public var timeRange: TimeRange = .week
         public var isLoading = false
+        /// iCloud 同步状态（nil = 尚未同步过；由 AppFeature 下发）。
+        public var cloudStatus: SyncStatus?
         @Presents public var alert: AlertState<Action.Alert>?
         /// 正在编辑的记录（sheet 呈现）。
         @Presents public var editing: CheckInDetailFeature.State?
@@ -65,6 +68,8 @@ public struct HistoryFeature {
         case editTapped(CheckIn.ID)
         case deleteCheckIn(id: CheckIn.ID)
         case saveAllFailed
+        /// 同步状态更新（AppFeature 下发）。
+        case syncStatusChanged(SyncStatus)
         case binding(BindingAction<State>)
         case alert(PresentationAction<Action.Alert>)
         case editing(PresentationAction<CheckInDetailFeature.Action>)
@@ -77,6 +82,7 @@ public struct HistoryFeature {
     // MARK: Dependencies
 
     @Dependency(CheckInClient.self) private var checkInClient
+    @Dependency(CloudSyncClient.self) private var cloudSyncClient
 
     public init() {}
 
@@ -161,16 +167,18 @@ public struct HistoryFeature {
                 record.photoIDs.forEach { PhotoStore.delete($0) }  // 照片文件随之清理
                 let remaining = state.records.elements
                 let saveAll = checkInClient.saveAll
-                return .run { [remaining] send in
+                let markDeleted = cloudSyncClient.markDeleted
+                return .run { [remaining, id] send in
                     do {
+                        // 登记删除墓碑，下次同步时从云端清算
+                        try? await markDeleted(id)
                         try await saveAll(remaining)
                     } catch {
                         await send(.saveAllFailed)
                     }
                 }
 
-            case .saveAllFailed:
-                state.alert = AlertState {
+            case .saveAllFailed:                state.alert = AlertState {
                     TextState("删除失败")
                 } actions: {
                     ButtonState(role: .cancel) {
@@ -181,6 +189,10 @@ public struct HistoryFeature {
                 }
                 state.isLoading = true
                 return reload()
+
+            case let .syncStatusChanged(status):
+                state.cloudStatus = status
+                return .none
 
             case .binding:
                 return .none
