@@ -1,0 +1,16 @@
+# Tuist
+Derived/
+Tuist/.build/
+*.xcodeproj
+*.xcworkspace
+
+# Swift Package Manager (Tuist/Package.resolved 应当提交)
+.build/
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+.DS_Store
+
+# mise
+.mise.local.toml
