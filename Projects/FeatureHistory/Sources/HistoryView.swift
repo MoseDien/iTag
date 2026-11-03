@@ -8,6 +8,9 @@ import SwiftUI
 public struct HistoryView: View {
     private let store: StoreOf<HistoryFeature>
 
+    /// 全屏查看的照片（临时 UI 状态，不入 Store）。
+    @State private var selectedPhoto: PhotoViewerItem?
+
     public init(store: StoreOf<HistoryFeature>) {
         self.store = store
     }
@@ -42,6 +45,9 @@ public struct HistoryView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 cloudStatusView
             }
+        }
+        .fullScreenCover(item: $selectedPhoto) { item in
+            PhotoViewer(photoID: item.photoID)
         }
     }
 
@@ -134,6 +140,9 @@ public struct HistoryView: View {
                         }
                         .frame(width: 60, height: 60)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .onTapGesture {
+                            selectedPhoto = PhotoViewerItem(photoID: id)
+                        }
                     }
                 }
             }

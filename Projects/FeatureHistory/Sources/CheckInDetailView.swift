@@ -5,6 +5,7 @@ import PhotosUI
 import SwiftUI
 
 /// 编辑打卡记录：备注 + 照片管理。
+/// 照片区采用 Form 标准形态：每张照片独立一行，避免 Section 内横向多按钮的交互冲突。
 public struct CheckInDetailView: View {
     private let store: StoreOf<CheckInDetailFeature>
 
@@ -50,7 +51,12 @@ public struct CheckInDetailView: View {
                 }
 
                 Section("照片（最多 \(CheckInPolicy.photoLimit) 张）") {
-                    photoRow
+                    ForEach(store.photoIDs, id: \.self) { photoID in
+                        photoRow(photoID)
+                    }
+                    if store.photoIDs.count < CheckInPolicy.photoLimit {
+                        addPhotoRow
+                    }
                 }
             }
             .navigationTitle("编辑打卡")
@@ -70,7 +76,6 @@ public struct CheckInDetailView: View {
             }
         }
         .onChange(of: pickerSelection) { _, items in
-            pickerSelection = []
             guard !items.isEmpty else { return }
             Task { @MainActor in
                 for item in items {
@@ -81,62 +86,48 @@ public struct CheckInDetailView: View {
                         store.send(.addPhoto(id))
                     }
                 }
+                // 处理完成后再复位选择，避免与 PhotosPicker 内部状态同步重入
+                pickerSelection = []
             }
         }
     }
 
-    // MARK: - 照片
+    // MARK: - 照片行
 
-    private var photoRow: some View {
-        HStack(spacing: 10) {
-            ForEach(store.photoIDs, id: \.self) { id in
-                photoThumb(id) {
-                    store.send(.removePhoto(id))
-                }
-            }
-            if store.photoIDs.count < CheckInPolicy.photoLimit {
-                PhotosPicker(
-                    selection: $pickerSelection,
-                    maxSelectionCount: CheckInPolicy.photoLimit - store.photoIDs.count,
-                    matching: .images
-                ) {
-                    Image(systemName: "photo.on.rectangle.angled")
-                        .font(.title3)
-                        .frame(width: 64, height: 64)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
-                }
-                .accessibilityLabel("添加照片")
-            }
-            if store.photoIDs.isEmpty {
-                Text("没有照片，可添加")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private func photoThumb(_ id: String, onRemove: @escaping () -> Void) -> some View {
-        ZStack(alignment: .topTrailing) {
-            if let image = PhotoStore.image(for: id) {
+    private func photoRow(_ photoID: String) -> some View {
+        HStack {
+            if let image = PhotoStore.image(for: photoID) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 64, height: 64)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .frame(width: 60, height: 60)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
             } else {
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: 8)
                     .fill(.quaternary)
-                    .frame(width: 64, height: 64)
+                    .frame(width: 60, height: 60)
             }
-            Button(action: onRemove) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.body)
-                    .symbolRenderingMode(.multicolor)
-                    .background(Circle().fill(.thinMaterial))
+            Spacer()
+            Button {
+                store.send(.removePhoto(photoID))
+            } label: {
+                Image(systemName: "trash")
+                    .foregroundStyle(.red)
             }
-            .offset(x: 6, y: -6)
+            .buttonStyle(.plain)
             .accessibilityLabel("移除照片")
         }
+    }
+
+    private var addPhotoRow: some View {
+        PhotosPicker(
+            selection: $pickerSelection,
+            maxSelectionCount: CheckInPolicy.photoLimit - store.photoIDs.count,
+            matching: .images
+        ) {
+            Label("添加照片", systemImage: "photo.on.rectangle.angled")
+        }
+        .accessibilityLabel("添加照片")
     }
 
     private static let dateTimeFormatter: DateFormatter = {

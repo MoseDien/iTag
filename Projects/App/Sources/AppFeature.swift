@@ -1,5 +1,6 @@
 import CloudSync
 import ComposableArchitecture
+import CoreClients
 import Domain
 import FeatureCheckIn
 import FeatureHistory
@@ -36,6 +37,7 @@ public struct AppFeature {
     // MARK: Dependencies
 
     @Dependency(CloudSyncClient.self) private var cloudSyncClient
+    @Dependency(CheckInClient.self) private var checkInClient
 
     public init() {}
 
@@ -97,11 +99,19 @@ public struct AppFeature {
 
             case let .syncResponse(.success(merged)):
                 state.history.cloudStatus = .ok
-                // 云端有变化时合并回本地列表（recordsLoaded 会按时间倒序重排）
-                if merged != state.history.records.elements {
-                    return .send(.history(.recordsLoaded(merged)))
+                // 合并结果必须落盘：否则本地 JSON/照片缺一不可地依赖每次云端拉取，
+                // 断网或重装后数据"消失"
+                let saveAll = checkInClient.saveAll
+                let persist: Effect<Action> = .run { _ in
+                    try? await saveAll(merged)
                 }
-                return .none
+                if merged != state.history.records.elements {
+                    return .concatenate(
+                        persist,
+                        .send(.history(.recordsLoaded(merged)))
+                    )
+                }
+                return persist
 
             case .syncResponse(.failure):
                 state.history.cloudStatus = .failed

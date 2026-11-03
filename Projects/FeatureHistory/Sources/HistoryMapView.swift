@@ -14,12 +14,6 @@ public struct HistoryMapView: View {
     @State private var camera: MapCameraPosition = .automatic
     @State private var selectedPhoto: PhotoViewerItem?
 
-    /// fullScreenCover 的 item 需 Identifiable。
-    private struct PhotoViewerItem: Identifiable {
-        let photoID: String
-        var id: String { photoID }
-    }
-
     public init(store: StoreOf<HistoryFeature>) {
         self.store = store
     }
@@ -171,47 +165,5 @@ public struct HistoryMapView: View {
         }
         let union = rects.dropFirst().reduce(rects[0]) { $0.union($1) }
         camera = .rect(union.insetBy(dx: -2000, dy: -2000))
-    }
-}
-
-/// 全屏照片查看：黑底 aspectFit，点击任意处关闭。
-private struct PhotoViewer: View {
-    let photoID: String
-
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-
-            if let image = PhotoStore.image(for: photoID) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .padding()
-            } else {
-                Image(systemName: "photo")
-                    .font(.largeTitle)
-                    .foregroundStyle(.secondary)
-            }
-
-            VStack {
-                HStack {
-                    Spacer()
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title)
-                            .foregroundStyle(.white.opacity(0.85))
-                    }
-                    .padding(20)
-                }
-                Spacer()
-            }
-        }
-        .onTapGesture {
-            dismiss()
-        }
     }
 }

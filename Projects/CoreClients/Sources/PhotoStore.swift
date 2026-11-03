@@ -25,6 +25,33 @@ public enum PhotoStore {
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
+    /// 感知哈希（8×8 灰度均值阈值 aHash）：对重编码/压缩鲁棒——
+    /// PhotosPicker 每次选择可能返回重编码后的数据（HEIC→JPEG、EXIF 剥离），
+    /// 字节级指纹会误判为不同图，感知哈希则稳定判定"同一张"。
+    /// 文件缺失或无法解码返回 nil。
+    public static func perceptualHash(for id: String) -> UInt64? {
+        guard let cgImage = image(for: id)?.cgImage else { return nil }
+        guard let context = CGContext(
+            data: nil,
+            width: 8,
+            height: 8,
+            bitsPerComponent: 8,
+            bytesPerRow: 8,
+            space: CGColorSpace(name: CGColorSpace.genericGrayGamma2_2)!,
+            bitmapInfo: CGImageAlphaInfo.none.rawValue
+        ) else { return nil }
+        context.interpolationQuality = .medium
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: 8, height: 8))
+        guard let data = context.data else { return nil }
+        let pixels = data.assumingMemoryBound(to: UInt8.self)
+        let average = (0..<64).reduce(0) { $0 + Int(pixels[$1]) } / 64
+        var hash: UInt64 = 0
+        for index in 0..<64 where pixels[index] > average {
+            hash |= 1 << UInt64(index)
+        }
+        return hash
+    }
+
     /// 读取照片（命中内存缓存优先）；不存在返回 nil。
     public static func image(for id: String) -> UIImage? {
         if let cached = cache.object(forKey: id as NSString) {

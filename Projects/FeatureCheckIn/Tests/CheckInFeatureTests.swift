@@ -156,8 +156,106 @@ final class CheckInFeatureTests: XCTestCase {
     }
 
     @MainActor
-    func testPhotoLimitAndRemoval() async {
+    func testDuplicatePhotoMergeByContent() async {
+        let now = Date(timeIntervalSince1970: 1_799_000_000)
+        let freshID = UUID(uuidString: "11111111-2222-3333-4444-555555555555")!
+        let location = Location(latitude: 39.9, longitude: 116.4, timestamp: now)
+
+        // 同一张图（左黑右白，高对比保证 aHash 稳定）重编码为两种压缩质量——字节不同但应判定为同一张
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 100, height: 100))
+        let source = renderer.image { context in
+            UIColor.black.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 50, height: 100))
+            UIColor.white.setFill()
+            context.fill(CGRect(x: 50, y: 0, width: 50, height: 100))
+        }
+        let sameHigh = source.jpegData(compressionQuality: 0.9)!
+        let sameLow = source.jpegData(compressionQuality: 0.2)!
+        XCTAssertNotEqual(sameHigh, sameLow, "重编码后字节应不同")
+        // 另一张不同的图（整体黑）
+        let other = renderer.image { context in
+            UIColor.black.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 100, height: 100))
+        }
+        .jpegData(compressionQuality: 0.9)!
+
+        try? PhotoStore.save(sameHigh, as: "p-old")
+        try? PhotoStore.save(sameLow, as: "p-same")
+        try? PhotoStore.save(other, as: "p-diff")
+        defer {
+            PhotoStore.delete("p-old")
+            PhotoStore.delete("p-diff")
+            // p-same 被覆盖流程判定为重复并删除
+        }
+
+        let existingID = UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!
+        let existing = CheckIn(
+            id: existingID,
+            latitude: 39.9, longitude: 116.4,
+            date: now.addingTimeInterval(-240),
+            placeName: "北京市朝阳区",
+            photoIDs: ["p-old"]
+        )
+        // 同内容被去重，只并入不同内容的照片
+        let expected = CheckIn(
+            id: existingID,
+            latitude: 39.9, longitude: 116.4,
+            date: now,
+            placeName: "北京市朝阳区",
+            photoIDs: ["p-old", "p-diff"]
+        )
+
         let store = TestStore(initialState: CheckInFeature.State()) {
+            CheckInFeature()
+        } withDependencies: {
+            $0.locationClient = LocationClient(
+                requestCurrentLocation: { location }
+            )
+            $0.geocodingClient = GeocodingClient(
+                reverseGeocode: { _, _ in "北京市朝阳区" }
+            )
+            $0.checkInClient = CheckInClient(
+                load: { [existing] },
+                append: { _ in },
+                upsert: { _ in },
+                saveAll: { _ in }
+            )
+            $0.date = DateGenerator { now }
+            $0.uuid = UUIDGenerator { freshID }
+        }
+
+        await store.send(.onTask) {
+            $0.isWorking = true
+        }
+        await store.receive(\.locationResponse) {
+            $0.isWorking = false
+            $0.location = location
+        }
+        await store.receive(\.placeNameResponse) {
+            $0.placeName = "北京市朝阳区"
+        }
+        await store.send(.photoAdded("p-same")) {
+            $0.pendingPhotoIDs = ["p-same"]
+        }
+        await store.send(.photoAdded("p-diff")) {
+            $0.pendingPhotoIDs = ["p-same", "p-diff"]
+        }
+        await store.send(.checkInTapped) {
+            $0.isWorking = true
+        }
+        await store.receive(\.duplicateCheckResponse)
+        await store.receive(\.saveResponse) {
+            $0.isWorking = false
+            $0.lastCheckIn = expected
+            $0.pendingPhotoIDs = []
+        }
+        await store.receive(\.delegate)
+        // 同内容的重复照片文件已被删除
+        XCTAssertNil(PhotoStore.fileURL(for: "p-same"))
+    }
+
+    @MainActor
+    func testPhotoLimitAndRemoval() async {        let store = TestStore(initialState: CheckInFeature.State()) {
             CheckInFeature()
         }
 

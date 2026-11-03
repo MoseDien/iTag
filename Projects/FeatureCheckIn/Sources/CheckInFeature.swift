@@ -210,13 +210,21 @@ public struct CheckInFeature {
                 )
 
             case let .duplicateCheckResponse(.some(existing)):
-                guard let fresh = makeCheckIn(state) else {
+                // 内容级去重（感知哈希）：与已有照片同一张图（即使重编码字节不同）的新照片不并入
+                let existingKeys = Set(
+                    existing.photoIDs.compactMap { PhotoStore.perceptualHash(for: $0) }
+                )
+                let newPhotoIDs = state.pendingPhotoIDs.filter { photoID in
+                    guard let key = PhotoStore.perceptualHash(for: photoID) else { return true }
+                    return !existingKeys.contains(key)
+                }
+                guard let fresh = makeCheckIn(state, photoIDs: newPhotoIDs) else {
                     state.isWorking = false
                     return .none
                 }
                 // 时间窗内同位置：直接覆盖原记录（保留 id，时间刷新、照片合并）
                 let merged = fresh.mergedOver(existing)
-                // 合并中被丢弃的新照片文件随之删除
+                // 合并中被丢弃/去重的新照片文件随之删除
                 state.pendingPhotoIDs
                     .filter { !merged.photoIDs.contains($0) }
                     .forEach { PhotoStore.delete($0) }
@@ -267,8 +275,9 @@ public struct CheckInFeature {
 
     // MARK: Effect helpers
 
-    /// 用当前 state 构造一条打卡记录（无目标点时返回 nil）。
-    private func makeCheckIn(_ state: State) -> CheckIn? {
+    /// 用当前 state 构造一条打卡记录（无目标点时返回 nil）；
+    /// photoIDs 可覆盖（覆盖打卡时传内容去重后的列表）。
+    private func makeCheckIn(_ state: State, photoIDs: [String]? = nil) -> CheckIn? {
         guard let target = state.target else { return nil }
         return CheckIn(
             id: uuid(),
@@ -277,7 +286,7 @@ public struct CheckInFeature {
             date: date(),
             placeName: state.placeName,
             note: state.note.trimmingCharacters(in: .whitespacesAndNewlines),
-            photoIDs: state.pendingPhotoIDs
+            photoIDs: photoIDs ?? state.pendingPhotoIDs
         )
     }
 

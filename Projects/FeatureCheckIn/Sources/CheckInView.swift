@@ -156,7 +156,6 @@ public struct CheckInView: View {
             }
         }
         .onChange(of: pickerSelection) { _, items in
-            pickerSelection = []
             guard !items.isEmpty else { return }
             Task { @MainActor in
                 for item in items {
@@ -168,6 +167,8 @@ public struct CheckInView: View {
                         store.send(.photoAdded(id))
                     }
                 }
+                // 处理完成后再复位选择，避免与 PhotosPicker 内部状态同步重入
+                pickerSelection = []
             }
         }
     }

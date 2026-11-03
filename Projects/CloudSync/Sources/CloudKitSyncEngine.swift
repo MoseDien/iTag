@@ -35,7 +35,7 @@ enum CloudKitSyncEngine {
         var remote: [CheckIn] = []
         var remoteUpdatedAt: [CheckIn.ID: Date] = [:]
         for record in remoteRecords {
-            guard let checkIn = checkIn(from: record) else { continue }
+            guard let checkIn = await checkIn(from: record, in: database) else { continue }
             remote.append(checkIn)
             remoteUpdatedAt[checkIn.id] = checkIn.updatedAt
         }
@@ -88,7 +88,7 @@ enum CloudKitSyncEngine {
         return record
     }
 
-    private static func checkIn(from record: CKRecord) -> CheckIn? {
+    private static func checkIn(from record: CKRecord, in database: CKDatabase) async -> CheckIn? {
         guard record.recordType == recordType,
               let id = UUID(uuidString: record.recordID.recordName),
               let latitude = record["latitude"] as? Double,
@@ -97,11 +97,16 @@ enum CloudKitSyncEngine {
         else { return nil }
 
         let photoIDs = record["photoIDs"] as? [String] ?? []
-        // 本地缺失的照片从资产恢复（保持原 ID）
-        for photoID in photoIDs {
-            guard PhotoStore.fileURL(for: photoID) == nil,
-                  let asset = record["photo-\(photoID)"] as? CKAsset,
-                  let url = asset.fileURL,
+        // 本地缺失的照片从资产恢复（保持原 ID）；
+        // query 结果中的 CKAsset 偶尔不带已下载的 fileURL，此时点查一次该记录重试
+        for photoID in photoIDs where PhotoStore.fileURL(for: photoID) == nil {
+            var asset = record["photo-\(photoID)"] as? CKAsset
+            if asset?.fileURL == nil,
+               let refetched = try? await database.record(for: record.recordID)
+            {
+                asset = refetched["photo-\(photoID)"] as? CKAsset
+            }
+            guard let url = asset?.fileURL,
                   let data = try? Data(contentsOf: url)
             else { continue }
             try? PhotoStore.save(data, as: photoID)

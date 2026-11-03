@@ -7,7 +7,7 @@ public enum CheckInPolicy {
     /// 重复打卡的时间窗（秒）：窗口内同位置重复打卡自动覆盖原记录。
     public static let duplicateWindow: TimeInterval = 5 * 60
     /// 单条打卡记录的照片上限。
-    public static let photoLimit = 9
+    public static let photoLimit = 3
 }
 
 let earthRadiusMeters = 6_371_000.0
